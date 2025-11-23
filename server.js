@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import cors from "cors";
 import session from "express-session";
+import MongoStore from "connect-mongo";  // ✅ إضافة جديدة
 import passport from "./lib/passport.config.js";
 
 import authRoutes from "./routes/auth.route.js";
@@ -25,12 +26,22 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
 
-// ✅ Session Middleware (لازم قبل passport)
+// ✅ Session Middleware with MongoDB Store (لازم قبل passport)
 app.use(
   session({
     secret: ENV.SESSION_SECRET || "your-session-secret-change-this",
     resave: false,
     saveUninitialized: false,
+    // ✅ MongoDB Session Store - الإضافة المهمة
+    store: MongoStore.create({
+      mongoUrl: ENV.MONGODB_URI,
+      touchAfter: 24 * 3600, // lazy session update (24 hours)
+      crypto: {
+        secret: ENV.SESSION_SECRET || "your-session-secret-change-this"
+      },
+      collectionName: 'sessions', // اسم الـ collection في MongoDB
+      ttl: 7 * 24 * 60 * 60 // 7 days (same as cookie maxAge)
+    }),
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       httpOnly: true,
@@ -71,6 +82,7 @@ const startServer = async () => {
       console.log("✅ Server running on port:", PORT);
       console.log("📍 Environment:", ENV.NODE_ENV);
       console.log("🌐 Client URL:", ENV.CLIENT_URL);
+      console.log("💾 Session Store: MongoDB"); // ✅ رسالة جديدة
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
