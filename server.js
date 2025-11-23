@@ -15,7 +15,8 @@ import chatRoutes from "./routes/chat.route.js";
 import { connectDB } from "./lib/db.js";
 import { ENV } from "./lib/env.js";
 import { app, server } from "./lib/socket.js";
-console.log("SESSION_SECRET VALUE:", process.env.SESSION_SECRET);
+
+console.log("SESSION_SECRET VALUE:", ENV.SESSION_SECRET);
 
 const PORT = ENV.PORT || 5001;
 
@@ -48,7 +49,7 @@ const startServer = async () => {
 
     app.use(
       session({
-        secret: ENV.SESSION_SECRET,
+        secret: ENV.SESSION_SECRET,   // ← هنا الحل الصحيح 🔥
         resave: false,
         saveUninitialized: false,
         store: MongoStore.create({
@@ -57,9 +58,9 @@ const startServer = async () => {
           collectionName: "sessions",
         }),
         cookie: {
-          maxAge: 7 * 24 * 60 * 60 * 1000,
+          maxAge: 7 * 24 * 60 * 60 * 1000, // أسبوع
           httpOnly: true,
-          secure: ENV.NODE_ENV === "production",
+          secure: ENV.NODE_ENV === "production", 
           sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
         },
       })
@@ -75,7 +76,7 @@ const startServer = async () => {
     app.use("/api/admin", adminRoutes);
     app.use("/api/chat", chatRoutes);
 
-    // Health
+    // Health check
     app.get("/", (req, res) =>
       res.json({
         status: "ok",
