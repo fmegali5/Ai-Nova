@@ -23,7 +23,17 @@ const PORT = ENV.PORT || 5001;
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
-app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
+
+// 🔥🔥 Updated CORS for Netlify + Localhost
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://ai-nova.netlify.app", // ← حط رابط Netlify بعد ما ترفعه
+    ],
+    credentials: true,
+  })
+);
 
 // ✅ Start Server Function
 const startServer = async () => {
@@ -43,10 +53,10 @@ const startServer = async () => {
           client: mongoose.connection.getClient(),
           touchAfter: 24 * 3600,
           crypto: {
-            secret: ENV.SESSION_SECRET || "your-session-secret-change-this"
+            secret: ENV.SESSION_SECRET || "your-session-secret-change-this",
           },
           collectionName: "sessions",
-          ttl: 7 * 24 * 60 * 60
+          ttl: 7 * 24 * 60 * 60,
         }),
         cookie: {
           maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -72,10 +82,10 @@ const startServer = async () => {
 
     // ✅ Health Check Routes
     app.get("/", (req, res) => {
-      res.json({ 
-        status: "ok", 
+      res.json({
+        status: "ok",
         message: "Backend API is running",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -92,7 +102,6 @@ const startServer = async () => {
       console.log("💾 Session Store: MongoDB");
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     });
-
   } catch (error) {
     console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.error("❌ Failed to start server:", error.message);
