@@ -2,7 +2,6 @@
 import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
-import path from "path";
 import cors from "cors";
 import session from "express-session";
 import MongoStore from "connect-mongo";
@@ -18,10 +17,9 @@ import { connectDB } from "./lib/db.js";
 import { ENV } from "./lib/env.js";
 import { app, server } from "./lib/socket.js";
 
-const __dirname = path.resolve();
 const PORT = ENV.PORT || 5001;
 
-// ✅ Basic Middleware (قبل كل حاجة)
+// ✅ Basic Middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
@@ -30,12 +28,12 @@ app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
 // ✅ Start Server Function
 const startServer = async () => {
   try {
-    // ✅ Step 1: Connect to MongoDB FIRST
+    // ✅ Step 1: Connect to MongoDB
     console.log("🔄 Connecting to MongoDB...");
     await connectDB();
     console.log("✅ MongoDB Connected Successfully");
 
-    // ✅ Step 2: Setup Session Store (بعد MongoDB connection)
+    // ✅ Step 2: Setup Session Store
     app.use(
       session({
         secret: ENV.SESSION_SECRET || "your-session-secret-change-this",
@@ -43,15 +41,15 @@ const startServer = async () => {
         saveUninitialized: false,
         store: MongoStore.create({
           client: mongoose.connection.getClient(),
-          touchAfter: 24 * 3600, // 24 hours
+          touchAfter: 24 * 3600,
           crypto: {
             secret: ENV.SESSION_SECRET || "your-session-secret-change-this"
           },
           collectionName: "sessions",
-          ttl: 7 * 24 * 60 * 60 // 7 days
+          ttl: 7 * 24 * 60 * 60
         }),
         cookie: {
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+          maxAge: 7 * 24 * 60 * 60 * 1000,
           httpOnly: true,
           secure: ENV.NODE_ENV === "production",
           sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
@@ -72,15 +70,20 @@ const startServer = async () => {
     app.use("/api/admin", adminRoutes);
     app.use("/api/chat", chatRoutes);
 
-    // ✅ Step 5: Production Static Files
-    if (ENV.NODE_ENV === "production") {
-      app.use(express.static(path.join(__dirname, "../frontend/dist")));
-      app.get("*", (_, res) => {
-        res.sendFile(path.join(__dirname, "../frontend", "dist", "index.html"));
+    // ✅ Health Check Routes
+    app.get("/", (req, res) => {
+      res.json({ 
+        status: "ok", 
+        message: "Backend API is running",
+        timestamp: new Date().toISOString()
       });
-    }
+    });
 
-    // ✅ Step 6: Start Server
+    app.get("/health", (req, res) => {
+      res.json({ status: "healthy" });
+    });
+
+    // ✅ Step 5: Start Server
     server.listen(PORT, () => {
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       console.log("✅ Server running on port:", PORT);
