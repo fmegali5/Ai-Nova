@@ -1,4 +1,3 @@
-// server.js
 import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -19,34 +18,42 @@ import { app, server } from "./lib/socket.js";
 
 const PORT = ENV.PORT || 5001;
 
-// ✅ Basic Middleware
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://ainoova.netlify.app"
+];
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
-app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
 
-// ✅ Start Server Function
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
 const startServer = async () => {
   try {
-    // ✅ Step 1: Connect to MongoDB
-    console.log("🔄 Connecting to MongoDB...");
     await connectDB();
-    console.log("✅ MongoDB Connected Successfully");
+    console.log("MongoDB Connected");
 
-    // ✅ Step 2: Setup Session Store
     app.use(
       session({
-        secret: ENV.SESSION_SECRET || "your-session-secret-change-this",
+        secret: ENV.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
         store: MongoStore.create({
           client: mongoose.connection.getClient(),
           touchAfter: 24 * 3600,
-          crypto: {
-            secret: ENV.SESSION_SECRET || "your-session-secret-change-this"
-          },
           collectionName: "sessions",
-          ttl: 7 * 24 * 60 * 60
         }),
         cookie: {
           maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -56,50 +63,33 @@ const startServer = async () => {
         },
       })
     );
-    console.log("✅ Session Store: MongoDB");
 
-    // ✅ Step 3: Passport Middleware
     app.use(passport.initialize());
     app.use(passport.session());
-    console.log("✅ Passport Initialized");
 
-    // ✅ Step 4: API Routes
+    // Routes
     app.use("/api/auth", authRoutes);
     app.use("/api/messages", messageRoutes);
     app.use("/api/ai", aiRoutes);
     app.use("/api/admin", adminRoutes);
     app.use("/api/chat", chatRoutes);
 
-    // ✅ Health Check Routes
-    app.get("/", (req, res) => {
-      res.json({ 
-        status: "ok", 
-        message: "Backend API is running",
-        timestamp: new Date().toISOString()
-      });
-    });
+    // Health
+    app.get("/", (req, res) =>
+      res.json({
+        status: "ok",
+        message: "Backend running",
+        timestamp: new Date().toISOString(),
+      })
+    );
 
-    app.get("/health", (req, res) => {
-      res.json({ status: "healthy" });
-    });
-
-    // ✅ Step 5: Start Server
-    server.listen(PORT, () => {
-      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.log("✅ Server running on port:", PORT);
-      console.log("📍 Environment:", ENV.NODE_ENV);
-      console.log("🌐 Client URL:", ENV.CLIENT_URL);
-      console.log("💾 Session Store: MongoDB");
-      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    });
-
+    server.listen(PORT, () =>
+      console.log(`Server running on port ${PORT}`)
+    );
   } catch (error) {
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.error("❌ Failed to start server:", error.message);
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("Server start error:", error);
     process.exit(1);
   }
 };
 
-// ✅ Start the application
 startServer();
