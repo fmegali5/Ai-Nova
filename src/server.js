@@ -5,7 +5,6 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import cors from "cors";
 import session from "express-session";
-import MongoStore from "connect-mongo"; // ✅
 import passport from "./lib/passport.config.js";
 
 import authRoutes from "./routes/auth.route.js";
