@@ -15,6 +15,9 @@ import chatRoutes from "./routes/chat.route.js";
 import { connectDB } from "./lib/db.js";
 import { ENV } from "./lib/env.js";
 import { app, server } from "./lib/socket.js";
+import { initSocket } from "./lib/socket.js";
+
+import { Server as IOServer } from "socket.io";
 
 console.log("SESSION_SECRET VALUE:", ENV.SESSION_SECRET);
 
@@ -25,12 +28,11 @@ const allowedOrigins = [
   "https://ainoova.netlify.app"
 ];
 
-// 🔹 Middlewares
+// Middlewares
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// 🔹 CORS
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -49,41 +51,63 @@ const startServer = async () => {
     await connectDB();
     console.log("MongoDB Connected");
 
-    // 🔥 أهم خطوة لتفعيل الكوكيز على Railway/Netlify
+    // مهم جداً على Railway
     app.set("trust proxy", 1);
 
-    // 🔹 Session
-    app.use(
-      session({
-        secret: ENV.SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false,
-        store: MongoStore.create({
-          client: mongoose.connection.getClient(),
-          touchAfter: 24 * 3600,
-          collectionName: "sessions",
-        }),
-        cookie: {
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-          httpOnly: true,
-          sameSite: "none",
-          secure: true,
-        },
-      })
-    );
+    // إعداد session middleware (نفسه سيتم ربطه مع socket.io)
+    const sessionMiddleware = session({
+      secret: ENV.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({
+        client: mongoose.connection.getClient(),
+        touchAfter: 24 * 3600,
+        collectionName: "sessions",
+      }),
+      cookie: {
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        sameSite: "none",
+        secure: true,
+      },
+    });
 
-    // 🔹 Passport
+    // ربط الـ session مع express
+    app.use(sessionMiddleware);
+
+    // Passport (إذا مستخدم)
     app.use(passport.initialize());
     app.use(passport.session());
 
-    // 🔹 Routes
+    // Routes
     app.use("/api/auth", authRoutes);
     app.use("/api/messages", messageRoutes);
     app.use("/api/ai", aiRoutes);
     app.use("/api/admin", adminRoutes);
     app.use("/api/chat", chatRoutes);
 
-    // 🔹 Health check
+    // Create socket.io instance AFTER session middleware is defined
+    const io = new IOServer(server, {
+      cors: {
+        origin: allowedOrigins,
+        credentials: true,
+      },
+    });
+
+    // wrap express middleware so it can be used by socket.io
+    const wrap = (middleware) => (socket, next) =>
+      middleware(socket.request, {}, next);
+
+    // attach session middleware to socket.io
+    io.use(wrap(sessionMiddleware));
+    // if using passport and passport.session(), attach it too:
+    io.use(wrap(passport.initialize()));
+    io.use(wrap(passport.session()));
+
+    // initialize our socket handlers (uses socket.request.session)
+    initSocket(io);
+
+    // Health
     app.get("/", (req, res) =>
       res.json({
         status: "ok",
@@ -92,9 +116,9 @@ const startServer = async () => {
       })
     );
 
-    server.listen(PORT, () =>
-      console.log(`Server running on port ${PORT}`)
-    );
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   } catch (error) {
     console.error("Server start error:", error);
     process.exit(1);
