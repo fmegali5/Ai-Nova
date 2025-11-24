@@ -27,7 +27,7 @@ router.put("/change-password", protectRoute, changePassword);
 
 // ---------------- CHECK SESSION ----------------
 router.get("/check", protectRoute, (req, res) => {
-  res.status(200).json(req.session.user);
+  res.status(200).json(req.user);
 });
 
 // ---------------- GOOGLE AUTH ----------------
