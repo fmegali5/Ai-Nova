@@ -1,9 +1,9 @@
 import Chat from "../models/Chat.js";
 
-// جيب كل المحادثات للـ user
+// ✅ جيب كل المحادثات للـ user (آمن)
 export const getUserChats = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id; // متأمن بالميدل وير
 
     const chats = await Chat.find({ userId })
       .sort({ updatedAt: -1 })
@@ -16,7 +16,7 @@ export const getUserChats = async (req, res) => {
   }
 };
 
-// إنشاء محادثة جديدة
+// ✅ إنشاء محادثة جديدة
 export const createChat = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -42,27 +42,22 @@ export const createChat = async (req, res) => {
   }
 };
 
-// تحديث محادثة موجودة
+// ✅ تحديث محادثة (بس لو انت صاحبها)
 export const updateChat = async (req, res) => {
   try {
     const userId = req.user._id;
     const { chatId } = req.params;
     const { messages, title } = req.body;
 
+    // بس صاحب الشات هو اللي يعدل عليها
     const chat = await Chat.findOne({ _id: chatId, userId });
 
     if (!chat) {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    if (messages) {
-      chat.messages = messages;
-    }
-
-    if (title) {
-      chat.title = title;
-    }
-
+    if (messages) chat.messages = messages;
+    if (title) chat.title = title;
     await chat.save();
 
     res.status(200).json(chat);
@@ -72,12 +67,13 @@ export const updateChat = async (req, res) => {
   }
 };
 
-// حذف محادثة
+// ✅ حذف محادثة (بس لو انت صاحبها)
 export const deleteChat = async (req, res) => {
   try {
     const userId = req.user._id;
     const { chatId } = req.params;
 
+    // لازم تكون صاحب الشات
     const chat = await Chat.findOneAndDelete({ _id: chatId, userId });
 
     if (!chat) {
@@ -91,7 +87,7 @@ export const deleteChat = async (req, res) => {
   }
 };
 
-// جيب محادثة واحدة
+// ✅ جيب محادثة واحدة (لك فقط)
 export const getChatById = async (req, res) => {
   try {
     const userId = req.user._id;
