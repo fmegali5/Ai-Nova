@@ -12,11 +12,14 @@ import { arcjetProtection } from "../middleware/arcjet.middleware.js";
 
 const router = express.Router();
 
+// ✅ AI Chat مفتوح للـ guests (قبل middleware)
+router.post("/chat", chatWithAI);
+
+// ✅ باقي الـ routes محمية (بعد middleware)
 router.use(arcjetProtection, protectRoute);
 
 router.post("/config", setAIConfig);
 router.get("/config", getAIConfig);
-router.post("/chat", chatWithAI);
 router.post("/translate", translateMessage);
 router.post("/summarize", summarizeConversation);
 router.post("/suggest-reply", suggestReply);
