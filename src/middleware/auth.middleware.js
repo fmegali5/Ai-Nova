@@ -1,67 +1,58 @@
+// middleware/auth.middleware.js
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { ENV } from "../lib/env.js";
 
-export const socketAuthMiddleware = async (socket, next) => {
+export const protectRoute = async (req, res, next) => {
   try {
-    // ✅ محاولة 1: استخرج token من cookies
-    const cookieToken = socket.handshake.headers.cookie
-      ?.split("; ")
-      .find((row) => row.startsWith("jwt="))
-      ?.split("=")[1];
-
-    // ✅ محاولة 2: استخرج token من auth object
-    const authToken = socket.handshake.auth?.token;
-
-    // ✅ اختار أي token موجود
-    const token = cookieToken || authToken;
-
-    // ✅ إذا مفيش token - السماح بالاتصال كـ guest
+    const token = req.cookies.jwt;
+    
     if (!token) {
-      console.log("⚠️ Socket connection without token - Allowing as guest user");
-      socket.user = null;
-      socket.userId = null;
-      socket.isGuest = true;
-      return next();
+      return res.status(401).json({ 
+        message: "Unauthorized - No token provided",
+        shouldLogout: true 
+      });
     }
 
-    // ✅ Verify the token
     const decoded = jwt.verify(token, ENV.JWT_SECRET);
-    if (!decoded || !decoded.userId) {
-      console.log("⚠️ Invalid token - Allowing as guest user");
-      socket.user = null;
-      socket.userId = null;
-      socket.isGuest = true;
-      return next();
+    
+    if (!decoded) {
+      return res.status(401).json({ 
+        message: "Unauthorized - Invalid token",
+        shouldLogout: true 
+      });
     }
 
-    // ✅ Find the user from DB
     const user = await User.findById(decoded.userId).select("-password");
+    
     if (!user) {
-      console.log("⚠️ User not found in DB - Allowing as guest user");
-      socket.user = null;
-      socket.userId = null;
-      socket.isGuest = true;
-      return next();
+      return res.status(404).json({ 
+        message: "User not found",
+        shouldLogout: true 
+      });
     }
 
-    // ✅ Attach authenticated user info to socket
-    socket.user = user;
-    socket.userId = user._id.toString();
-    socket.isGuest = false;
+    // ✅ CHECK SESSION ID
+    if (user.currentSessionId !== decoded.sessionId) {
+      return res.status(401).json({ 
+        message: "Session expired - Logged in from another device",
+        shouldLogout: true,
+        reason: "ANOTHER_SESSION"
+      });
+    }
 
-    console.log(`✅ Socket authenticated for user: ${user.fullName} (${user._id})`);
-
+    req.user = user;
     next();
   } catch (error) {
-    // ✅ في حالة أي خطأ - السماح بالاتصال كـ guest
-    console.log("⚠️ Error in socket authentication:", error.message);
-    console.log("→ Allowing connection as guest user");
+    console.log("Error in protectRoute middleware:", error);
     
-    socket.user = null;
-    socket.userId = null;
-    socket.isGuest = true;
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        message: "Invalid or expired token",
+        shouldLogout: true 
+      });
+    }
     
-    next();
+    res.status(500).json({ message: "Internal server error" });
   }
 };
