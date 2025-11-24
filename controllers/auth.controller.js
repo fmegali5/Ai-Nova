@@ -1,12 +1,12 @@
 // controllers/auth.controller.js
 import { sendWelcomeEmail } from "../emails/emailHandlers.js";
-import { createSessionForUser, destroyUserSession } from "../lib/utils.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import { ENV } from "../lib/env.js";
 import cloudinary from "../lib/cloudinary.js";
 import crypto from "crypto";
 import { invalidateUserSession } from "../lib/socket.js";
+import { generateToken } from "../lib/utils.js"; // ← مهم
 
 export const signup = async (req, res) => {
   const { fullName, email, password } = req.body;
@@ -43,8 +43,8 @@ export const signup = async (req, res) => {
 
     const saved = await newUser.save();
 
-    // 🔥 Create Session
-    createSessionForUser(req, saved, sessionId);
+    // 🔥 Generate JWT Cookie
+    generateToken(saved._id, res, sessionId);
 
     res.status(201).json({
       _id: saved._id,
@@ -53,11 +53,7 @@ export const signup = async (req, res) => {
       profilePic: saved.profilePic,
     });
 
-    try {
-      await sendWelcomeEmail(saved.email, saved.fullName, ENV.CLIENT_URL);
-    } catch (error) {
-      console.error("Failed to send welcome email:", error);
-    }
+    await sendWelcomeEmail(saved.email, saved.fullName, ENV.CLIENT_URL).catch(() => {});
   } catch (error) {
     console.log("Error in signup controller:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -78,18 +74,16 @@ export const login = async (req, res) => {
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid credentials" });
 
-    // 🔥 Invalidate old socket session
+    // 🔥 Invalidate socket session
     invalidateUserSession(user._id.toString(), "Logged in from another device");
 
-    // Generate new sessionId
     const newSessionId = crypto.randomUUID();
-
     user.currentSessionId = newSessionId;
     user.lastLoginAt = new Date();
     await user.save();
 
-    // Create new Session
-    createSessionForUser(req, user, newSessionId);
+    // 🔥 Set JWT Cookie
+    generateToken(user._id, res, newSessionId);
 
     res.status(200).json({
       _id: user._id,
@@ -105,15 +99,12 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
   try {
-    if (req.session?.user) {
-      await User.findByIdAndUpdate(req.session.user._id, {
-        currentSessionId: null,
-      });
-    }
+    res.clearCookie("jwt", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
 
-    await destroyUserSession(req);
-
-    res.clearCookie("connect.sid", { path: "/" });
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.error("Error in logout:", error);
@@ -124,30 +115,24 @@ export const logout = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { profilePic, fullName } = req.body;
-    const userId = req.session.user._id;
+    const userId = req.user.userId; // from decoded JWT
+
+    let updates = {};
 
     if (profilePic) {
       const uploadResponse = await cloudinary.uploader.upload(profilePic);
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { profilePic: uploadResponse.secure_url },
-        { new: true }
-      ).select("-password");
-
-      return res.status(200).json(updatedUser);
+      updates.profilePic = uploadResponse.secure_url;
     }
 
-    if (fullName) {
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { fullName },
-        { new: true }
-      ).select("-password");
+    if (fullName) updates.fullName = fullName;
 
-      return res.status(200).json(updatedUser);
-    }
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updates,
+      { new: true }
+    ).select("-password");
 
-    return res.status(400).json({ message: "No data to update" });
+    res.status(200).json(updatedUser);
   } catch (error) {
     console.log("Error in update profile:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -157,7 +142,7 @@ export const updateProfile = async (req, res) => {
 export const updateSettings = async (req, res) => {
   try {
     const { fullName, email } = req.body;
-    const userId = req.session.user._id;
+    const userId = req.user.userId;
 
     if (!fullName || !email) {
       return res.status(400).json({ message: "Full name and email are required" });
@@ -168,11 +153,9 @@ export const updateSettings = async (req, res) => {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    if (email !== req.session.user.email) {
-      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
-      if (emailExists) {
-        return res.status(400).json({ message: "Email already in use" });
-      }
+    const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+    if (emailExists) {
+      return res.status(400).json({ message: "Email already in use" });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -191,7 +174,7 @@ export const updateSettings = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { newPassword } = req.body;
-    const userId = req.session.user._id;
+    const userId = req.user.userId;
 
     if (!newPassword) {
       return res.status(400).json({ message: "New password is required" });
