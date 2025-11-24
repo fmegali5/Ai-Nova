@@ -1,0 +1,83 @@
+// server.js
+import "dotenv/config";
+import express from "express";
+import cookieParser from "cookie-parser";
+import path from "path";
+import cors from "cors";
+import session from "express-session";
+import passport from "./lib/passport.config.js";
+
+import authRoutes from "./routes/auth.route.js";
+import messageRoutes from "./routes/message.route.js";
+import aiRoutes from "./routes/ai.route.js";
+import adminRoutes from "./routes/admin.route.js";
+import chatRoutes from "./routes/chat.route.js";
+
+import { connectDB } from "./lib/db.js";
+import { ENV } from "./lib/env.js";
+import { app, server } from "./lib/socket.js";
+
+const __dirname = path.resolve();
+const PORT = ENV.PORT || 5001;
+
+// ✅ MIDDLEWARE - لازم يكون قبل الـ Routes
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+// ✅ CORS Configuration محسّنة
+app.use(cors({
+  origin: ENV.CLIENT_URL || "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// ✅ Session Middleware (لازم قبل passport)
+app.use(
+  session({
+    secret: ENV.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: ENV.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+  })
+);
+
+// ✅ Passport Middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ✅ ROUTES
+app.use("/api/auth", authRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/chat", chatRoutes);
+
+// ✅ Health Check Route
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ 
+    status: "OK", 
+    message: "Server is running",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ✅ Start Server Function
+const startServer = async () => {
+  try {
+    await connectDB();
+    server.listen(PORT, () => {
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
