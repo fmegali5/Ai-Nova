@@ -1,7 +1,7 @@
 import axios from "axios";
 import User from "../models/User.js";
 
-// ✅ OpenRouter Base URL (لـ Grok, DeepSeek, Tongyi)
+// ✅ OpenRouter Base URL (لـ KAT-Coder-Pro, Grok, DeepSeek, Tongyi)
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // ✅ Mistral Base URL (الرسمي)
@@ -45,12 +45,35 @@ export const getAIConfig = async (req, res) => {
 
 export const chatWithAI = async (req, res) => {
   try {
-    const { message, model } = req.body;
+    const { message, model = "kat-coder-pro" } = req.body;
 
     if (!message) {
       return res.status(400).json({ message: "Message is required" });
     }
 
+    // ✅ KAT-Coder-Pro - متاح للـ guests
+    if (model === "kat-coder-pro") {
+      if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ 
+          message: "OpenRouter API key not configured" 
+        });
+      }
+      
+      const aiResponse = await chatWithOpenRouter(
+        message, 
+        [], 
+        process.env.OPENROUTER_API_KEY, 
+        "kwaipilot/kat-coder-pro:free"
+      );
+      
+      return res.status(200).json({ 
+        success: true,
+        response: aiResponse,
+        model: "kat-coder-pro"
+      });
+    }
+
+    // ✅ باقي الـ models - تحتاج Admin API Keys
     const adminUser = await User.findOne({ email: "admin@gmail.com" }).select("apiKeys");
     
     if (!adminUser || !adminUser.apiKeys) {
@@ -93,14 +116,19 @@ export const chatWithAI = async (req, res) => {
       
     } else {
       return res.status(400).json({ 
-        message: `Unsupported AI model: ${model}.` 
+        message: `Unsupported AI model: ${model}. Available: kat-coder-pro, mistral, grok, deepseek, tongyi` 
       });
     }
 
-    res.status(200).json({ response: aiResponse });
+    res.status(200).json({ 
+      success: true,
+      response: aiResponse,
+      model: model
+    });
   } catch (error) {
     console.error("Error in chatWithAI:", error);
     res.status(500).json({ 
+      success: false,
       message: error.response?.data?.error?.message || error.message || "Failed to get AI response" 
     });
   }
@@ -228,7 +256,7 @@ async function chatWithMistral(message, history, apiKey, model) {
   }
 }
 
-// ✅ OpenRouter - لباقي الـ models (Grok, DeepSeek, Tongyi)
+// ✅ OpenRouter - لباقي الـ models (KAT-Coder-Pro, Grok, DeepSeek, Tongyi)
 async function chatWithOpenRouter(message, history, apiKey, model) {
   try {
     const messages = [
@@ -250,7 +278,7 @@ async function chatWithOpenRouter(message, history, apiKey, model) {
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://ainoova.netlify.app",
+          "HTTP-Referer": process.env.CLIENT_URL || "https://ainoova.netlify.app",
           "X-Title": "AI Nova Chat"
         }
       }
