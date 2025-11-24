@@ -49,7 +49,7 @@ const sessionMiddleware = session({
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    domain: ".netlify.app",       // 🔥 يسمح للكوكيز تشتغل على Netlify
+    domain: "netlify.app",       // 🔥 يسمح للكوكيز تشتغل على Netlify
     maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 });
