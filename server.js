@@ -25,10 +25,12 @@ const allowedOrigins = [
   "https://ainoova.netlify.app"
 ];
 
+// 🔹 Middlewares
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
+// 🔹 CORS
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -47,9 +49,13 @@ const startServer = async () => {
     await connectDB();
     console.log("MongoDB Connected");
 
+    // 🔥 أهم خطوة لتفعيل الكوكيز على Railway/Netlify
+    app.set("trust proxy", 1);
+
+    // 🔹 Session
     app.use(
       session({
-        secret: ENV.SESSION_SECRET,   // ← هنا الحل الصحيح 🔥
+        secret: ENV.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
         store: MongoStore.create({
@@ -58,26 +64,26 @@ const startServer = async () => {
           collectionName: "sessions",
         }),
         cookie: {
-          maxAge: 7 * 24 * 60 * 60 * 1000, // أسبوع
+          maxAge: 7 * 24 * 60 * 60 * 1000,
           httpOnly: true,
           sameSite: "none",
           secure: true,
-
         },
       })
     );
 
+    // 🔹 Passport
     app.use(passport.initialize());
     app.use(passport.session());
 
-    // Routes
+    // 🔹 Routes
     app.use("/api/auth", authRoutes);
     app.use("/api/messages", messageRoutes);
     app.use("/api/ai", aiRoutes);
     app.use("/api/admin", adminRoutes);
     app.use("/api/chat", chatRoutes);
 
-    // Health check
+    // 🔹 Health check
     app.get("/", (req, res) =>
       res.json({
         status: "ok",
