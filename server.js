@@ -60,8 +60,9 @@ const startServer = async () => {
         cookie: {
           maxAge: 7 * 24 * 60 * 60 * 1000, // أسبوع
           httpOnly: true,
-          secure: ENV.NODE_ENV === "production", 
-          sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
+          sameSite: "none",
+          secure: true,
+
         },
       })
     );
