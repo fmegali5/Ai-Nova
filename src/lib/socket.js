@@ -1,62 +1,68 @@
-// lib/socket.js
+// src/lib/socket.js
 import { Server } from "socket.io";
 import http from "http";
 import express from "express";
+import { socketAuthMiddleware } from "../middlewares/socket.auth.middleware.js";
 import { ENV } from "./env.js";
-import { socketAuthMiddleware } from "../middleware/socket.auth.middleware.js";
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
-    origin: [ENV.CLIENT_URL],
+    origin: [
+      "http://localhost:5173",
+      "https://ainoova.netlify.app",
+    ],
     credentials: true,
+    methods: ["GET", "POST"],
   },
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
 });
 
-// Apply authentication middleware to all socket connections
+// ✅ Socket Authentication Middleware
 io.use(socketAuthMiddleware);
 
-// ✅ أولاً: عرّف userSocketMap
-const userSocketMap = {}; // {userId: socketId}
+// ✅ Store online users
+const onlineUsers = new Map(); // userId -> socketId
 
-// ✅ ثانياً: ثم عرّف الـ functions
-export function getReceiverSocketId(userId) {
-  return userSocketMap[userId];
-}
-
-// ✅ Function to invalidate user session
-export function invalidateUserSession(userId, message = "Logged in from another device") {
-  const socketId = userSocketMap[userId];
-  if (socketId) {
-    console.log(`🔴 Invalidating session for user: ${userId}`);
-    // Send session revoked event to the specific socket
-    io.to(socketId).emit("SESSION_REVOKED", {
-      message,
-      reason: "ANOTHER_SESSION",
-    });
-    // Remove user from socket map
-    delete userSocketMap[userId];
-  }
-}
-
-// Socket.IO connection handling
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.userId);
-  
-  const userId = socket.userId;
-  if (userId) {
-    userSocketMap[userId] = socket.id;
+  console.log("🔌 New socket connection:", socket.id);
+
+  // ✅ Handle authenticated users only
+  if (socket.userId) {
+    onlineUsers.set(socket.userId, socket.id);
+    console.log(`✅ User ${socket.userId} is online`);
+
+    // Broadcast online users to all connected clients
+    io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
+  } else {
+    console.log("👤 Guest user connected:", socket.id);
   }
 
-  // Emit online users to all connected clients
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
+  // ✅ Handle disconnect
   socket.on("disconnect", () => {
-    console.log("🔴 User disconnected:", socket.userId);
-    delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      console.log(`👋 User ${socket.userId} disconnected`);
+      io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
+    } else {
+      console.log("👋 Guest user disconnected:", socket.id);
+    }
+  });
+
+  // ✅ Custom event example
+  socket.on("sendMessage", (data) => {
+    if (!socket.userId) {
+      return socket.emit("error", { message: "Authentication required" });
+    }
+
+    const recipientSocketId = onlineUsers.get(data.recipientId);
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit("newMessage", data);
+    }
   });
 });
 
-export { io, app, server };
+export { app, server, io };
