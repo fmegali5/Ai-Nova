@@ -1,9 +1,7 @@
-// src/lib/socket.js
 import { Server } from "socket.io";
 import http from "http";
 import express from "express";
 import { socketAuthMiddleware } from "../middlewares/socket.auth.middleware.js";
-import { ENV } from "./env.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -31,36 +29,49 @@ io.on("connection", (socket) => {
   console.log("🔌 New socket connection:", socket.id);
 
   // ✅ Handle authenticated users only
-  if (socket.userId) {
-    onlineUsers.set(socket.userId, socket.id);
-    console.log(`✅ User ${socket.userId} is online`);
-
-    // Broadcast online users to all connected clients
-    io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
-  } else {
+  if (socket.isGuest) {
     console.log("👤 Guest user connected:", socket.id);
+  } else {
+    onlineUsers.set(socket.userId, socket.id);
+    console.log(`✅ User ${socket.user.fullName} is online`);
+    io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
   }
 
   // ✅ Handle disconnect
   socket.on("disconnect", () => {
-    if (socket.userId) {
-      onlineUsers.delete(socket.userId);
-      console.log(`👋 User ${socket.userId} disconnected`);
-      io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
-    } else {
+    if (socket.isGuest) {
       console.log("👋 Guest user disconnected:", socket.id);
+    } else {
+      onlineUsers.delete(socket.userId);
+      console.log(`👋 User ${socket.user.fullName} disconnected`);
+      io.emit("getOnlineUsers", Array.from(onlineUsers.keys()));
     }
   });
 
-  // ✅ Custom event example
+  // ✅ Send message event
   socket.on("sendMessage", (data) => {
-    if (!socket.userId) {
-      return socket.emit("error", { message: "Authentication required" });
+    if (socket.isGuest) {
+      return socket.emit("error", { 
+        message: "Authentication required to send messages" 
+      });
     }
 
     const recipientSocketId = onlineUsers.get(data.recipientId);
     if (recipientSocketId) {
       io.to(recipientSocketId).emit("newMessage", data);
+    }
+  });
+
+  // ✅ Typing indicator
+  socket.on("typing", (data) => {
+    if (socket.isGuest) return;
+
+    const recipientSocketId = onlineUsers.get(data.recipientId);
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit("userTyping", {
+        userId: socket.userId,
+        isTyping: data.isTyping,
+      });
     }
   });
 });
