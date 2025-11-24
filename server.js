@@ -49,15 +49,16 @@ app.use(
     }),
     cookie: {
       httpOnly: true,
-      secure: true, // Railway uses HTTPS
-      sameSite: "none",
+      secure: true,               // Railway = HTTPS
+      sameSite: "none",           // Required for Cross-Site Cookies
+      domain: ".netlify.app",     // 🔥 أهم سطر — يسمح بإرسال الكوكي من Netlify
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
 );
 
 // ======================================================
-// 4) CORS (AFTER SESSION! )
+// 4) CORS (AFTER SESSION!)
 // ======================================================
 const allowedOrigins = [
   "http://localhost:5173",
