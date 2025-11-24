@@ -25,9 +25,12 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// ✅ CORS Configuration محسّنة
+// ✅ CORS Configuration مع دومين Netlify
 app.use(cors({
-  origin: ENV.CLIENT_URL || "http://localhost:5173",
+  origin: [
+    "http://localhost:5173", // Development
+    "https://ainoova.netlify.app", // ✅ Production - Netlify
+  ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -43,6 +46,7 @@ app.use(
       secure: ENV.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: ENV.NODE_ENV === "production" ? "none" : "lax", // ✅ مهم للـ cross-domain cookies
     },
   })
 );
@@ -63,7 +67,17 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({ 
     status: "OK", 
     message: "Server is running",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: ENV.NODE_ENV
+  });
+});
+
+// ✅ Root Route للتأكد من الباك إند شغال
+app.get("/", (req, res) => {
+  res.status(200).json({ 
+    message: "AI Nova API",
+    status: "running",
+    docs: "/api/health"
   });
 });
 
@@ -72,7 +86,9 @@ const startServer = async () => {
   try {
     await connectDB();
     server.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      console.log(`🚀 Server is running on port ${PORT}`);
+      console.log(`📡 Environment: ${ENV.NODE_ENV}`);
+      console.log(`🌐 CORS enabled for: localhost:5173, ainoova.netlify.app`);
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
