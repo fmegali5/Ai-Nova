@@ -1,54 +1,69 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const User = require("../models/user.model");
+// routes/auth.route.js
+
+import express from "express";
+import passport from "../lib/passport.config.js";
+
+import {
+  signup,
+  login,
+  logout,
+  updateProfile,
+  updateSettings,
+  changePassword,
+} from "../controllers/auth.controller.js";
+
+import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// --- LOGIN ---
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
+// ---------------- AUTH BASIC ----------------
+router.post("/signup", signup);
+router.post("/login", login);
+router.post("/logout", logout);
 
-    if (!email || !password)
-      return res.status(400).json({ message: "Email and password required" });
+router.put("/update-profile", protectRoute, updateProfile);
+router.put("/update-settings", protectRoute, updateSettings);
+router.put("/change-password", protectRoute, changePassword);
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+// ---------------- CHECK SESSION ----------------
+router.get("/check", protectRoute, (req, res) => {
+  res.status(200).json(req.session.user);
+});
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(401).json({ message: "Invalid password" });
+// ---------------- GOOGLE AUTH ----------------
+router.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
 
-    req.session.userId = user._id;
+router.get(
+  "/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: `${process.env.CLIENT_URL}/login?error=email_exists`,
+    session: false,
+  }),
+  async (req, res) => {
+    try {
+      const crypto from "crypto";
+      const newSessionId = crypto.randomUUID();
 
-    return res.json({
-      message: "Login successful",
-      user: { id: user._id, email: user.email }
-    });
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    return res.status(500).json({ message: "Server error during login" });
+      req.user.currentSessionId = newSessionId;
+      req.user.lastLoginAt = new Date();
+      await req.user.save();
+
+      res.cookie("connect.sid", req.sessionID, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+      });
+
+      res.redirect(process.env.CLIENT_URL);
+    } catch (error) {
+      console.error("Google callback error:", error);
+      res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+    }
   }
-});
+);
 
-// --- CHECK AUTH ---
-router.get("/check", (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ authenticated: false });
-  }
-
-  return res.json({
-    authenticated: true,
-    userId: req.session.userId
-  });
-});
-
-// --- LOGOUT ---
-router.post("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie("connect.sid");
-    return res.json({ message: "Logged out" });
-  });
-});
-
-module.exports = router;
+// ---------------- EXPORT ----------------
+export default router;
