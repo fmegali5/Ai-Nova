@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import cors from "cors";
 import session from "express-session";
-import MongoStore from "connect-mongo";
+import MongoStore from "connect-mongo"; // ✅
 import passport from "./lib/passport.config.js";
 
 import authRoutes from "./routes/auth.route.js";
@@ -21,26 +21,23 @@ import { app, server } from "./lib/socket.js";
 const __dirname = path.resolve();
 const PORT = ENV.PORT || 5001;
 
-// ✅ Trust Proxy - CRITICAL for Railway
 app.set("trust proxy", 1);
 
-// ✅ MIDDLEWARE - لازم يكون قبل الـ Routes
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// ✅ CORS Configuration مع دومين Netlify
 app.use(cors({
   origin: [
-    "http://localhost:5173", // Development
-    "https://ainoova.netlify.app", // Production - Netlify
+    "http://localhost:5173",
+    "https://ainoova.netlify.app",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// ✅ Session Middleware مع MongoDB Store للـ Production
+// ✅ Session with MongoDB Store
 app.use(
   session({
     secret: ENV.SESSION_SECRET,
@@ -63,65 +60,46 @@ app.use(
   })
 );
 
-// ✅ Passport Middleware
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ✅ ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/chat", chatRoutes);
 
-// ✅ Health Check Route
 app.get("/api/health", (req, res) => {
   res.status(200).json({ 
     status: "OK", 
     message: "Server is running",
     timestamp: new Date().toISOString(),
     environment: ENV.NODE_ENV,
-    session: req.session ? "active" : "inactive",
-    cookies: req.cookies ? Object.keys(req.cookies) : [],
   });
 });
 
-// ✅ Root Route
 app.get("/", (req, res) => {
   res.status(200).json({ 
     message: "AI Nova API",
     status: "running",
     version: "1.0.0",
-    endpoints: {
-      health: "/api/health",
-      auth: "/api/auth",
-      messages: "/api/messages",
-      ai: "/api/ai",
-      admin: "/api/admin",
-      chat: "/api/chat"
-    }
   });
 });
 
-// ✅ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ 
     error: "Route not found",
     path: req.path,
-    method: req.method
   });
 });
 
-// ✅ Error Handler
 app.use((err, req, res, next) => {
   console.error("❌ Server Error:", err);
   res.status(err.status || 500).json({
     error: err.message || "Internal Server Error",
-    ...(ENV.NODE_ENV === "development" && { stack: err.stack })
   });
 });
 
-// ✅ Start Server Function
 const startServer = async () => {
   try {
     await connectDB();
@@ -129,13 +107,8 @@ const startServer = async () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📡 Environment: ${ENV.NODE_ENV}`);
       console.log(`🔐 Trust Proxy: ${app.get("trust proxy")}`);
-      console.log(`🌐 CORS enabled for:`);
-      console.log(`   - http://localhost:5173 (Development)`);
-      console.log(`   - https://ainoova.netlify.app (Production)`);
-      console.log(`🍪 Cookie Settings:`);
-      console.log(`   - sameSite: ${ENV.NODE_ENV === "production" ? "none" : "lax"}`);
-      console.log(`   - secure: ${ENV.NODE_ENV === "production"}`);
-      console.log(`🔗 Health check: /api/health`);
+      console.log(`🌐 CORS enabled for Netlify`);
+      console.log(`🍪 Session store: ${ENV.NODE_ENV === "production" ? "MongoDB" : "Memory"}`);
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
@@ -143,7 +116,6 @@ const startServer = async () => {
   }
 };
 
-// ✅ Graceful Shutdown
 process.on("SIGTERM", () => {
   console.log("👋 SIGTERM received, shutting down gracefully...");
   server.close(() => {
