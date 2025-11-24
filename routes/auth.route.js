@@ -16,6 +16,12 @@ import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
+/*
+|--------------------------------------------------------------------------
+| AUTH (LOCAL)
+|--------------------------------------------------------------------------
+*/
+
 router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", logout);
@@ -28,7 +34,12 @@ router.get("/check", protectRoute, (req, res) =>
   res.status(200).json(req.user)
 );
 
-// GOOGLE AUTH
+/*
+|--------------------------------------------------------------------------
+| GOOGLE AUTH
+|--------------------------------------------------------------------------
+*/
+
 router.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -42,11 +53,13 @@ router.get(
   }),
   async (req, res) => {
     try {
+      // Generate Session
       const newSessionId = crypto.randomUUID();
       req.user.currentSessionId = newSessionId;
       req.user.lastLoginAt = new Date();
       await req.user.save();
 
+      // Sign JWT
       const token = jwt.sign(
         {
           userId: req.user._id,
@@ -56,11 +69,12 @@ router.get(
         { expiresIn: "7d" }
       );
 
+      // Set Cookie (IMPORTANT FOR NETLIFY + RAILWAY)
       res.cookie("jwt", token, {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       });
 
       res.redirect(process.env.CLIENT_URL);
