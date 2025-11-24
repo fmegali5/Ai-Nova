@@ -1,12 +1,7 @@
-// middleware/auth.middleware.js
-import jwt from "jsonwebtoken";
-import User from "../models/User.js";
-import { ENV } from "../lib/env.js";
-
 export const protectRoute = async (req, res, next) => {
   try {
     const token = req.cookies.jwt;
-    
+
     if (!token) {
       return res.status(401).json({ 
         message: "Unauthorized - No token provided",
@@ -15,7 +10,7 @@ export const protectRoute = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, ENV.JWT_SECRET);
-    
+
     if (!decoded) {
       return res.status(401).json({ 
         message: "Unauthorized - Invalid token",
@@ -24,7 +19,7 @@ export const protectRoute = async (req, res, next) => {
     }
 
     const user = await User.findById(decoded.userId).select("-password");
-    
+
     if (!user) {
       return res.status(404).json({ 
         message: "User not found",
@@ -32,7 +27,7 @@ export const protectRoute = async (req, res, next) => {
       });
     }
 
-    // ✅ CHECK SESSION ID
+    // CHECK SESSION
     if (user.currentSessionId !== decoded.sessionId) {
       return res.status(401).json({ 
         message: "Session expired - Logged in from another device",
@@ -41,18 +36,26 @@ export const protectRoute = async (req, res, next) => {
       });
     }
 
-    req.user = user;
+    // ⬅⬅⬅ أهم تعديل
+    req.user = {
+      userId: user._id.toString(),
+      sessionId: decoded.sessionId,
+      fullName: user.fullName,
+      email: user.email,
+      profilePic: user.profilePic
+    };
+
     next();
   } catch (error) {
     console.log("Error in protectRoute middleware:", error);
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
+
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({
         message: "Invalid or expired token",
-        shouldLogout: true 
+        shouldLogout: true,
       });
     }
-    
+
     res.status(500).json({ message: "Internal server error" });
   }
 };
