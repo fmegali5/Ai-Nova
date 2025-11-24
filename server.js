@@ -3,6 +3,8 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import mongoose from "mongoose";
+import session from "express-session";
+import MongoStore from "connect-mongo";
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
@@ -19,7 +21,6 @@ import { initSocket } from "./lib/socket.js";
 
 const app = express();
 const server = http.createServer(app);
-
 const PORT = ENV.PORT || 5001;
 
 // -------------------- Allowed CORS Origins --------------------
@@ -28,10 +29,16 @@ const allowedOrigins = [
   "https://ainoova.netlify.app",
 ];
 
-// -------------------- CORS FIXED --------------------
+// -------------------- CORS --------------------
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
@@ -45,8 +52,27 @@ app.use(cookieParser());
 await connectDB();
 console.log("MongoDB Connected");
 
-// -------------------- Trust Proxy --------------------
+// -------------------- Trust Proxy (important for Railway) --------------------
 app.set("trust proxy", 1);
+
+// -------------------- SESSION MIDDLEWARE --------------------
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "fallback_secret",
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+      ttl: 24 * 60 * 60, // 1 day
+    }),
+    cookie: {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    },
+  })
+);
 
 // -------------------- ROUTES --------------------
 app.use("/api/auth", authRoutes);
