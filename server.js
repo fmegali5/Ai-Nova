@@ -7,7 +7,7 @@ import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 
-import authRoutes from "./routes/auth.route.js";
+import { authRoutes } from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import aiRoutes from "./routes/ai.route.js";
 import adminRoutes from "./routes/admin.route.js";
