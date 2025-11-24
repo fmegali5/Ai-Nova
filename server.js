@@ -45,13 +45,13 @@ const sessionMiddleware = session({
     mongoUrl: ENV.MONGO_URI,
     ttl: 7 * 24 * 60 * 60,
   }),
-  cookie: {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: "netlify.app",       // 🔥 يسمح للكوكيز تشتغل على Netlify
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  },
+cookie: {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+}
+
 });
 
 // Important: استخدمه قبل CORS
