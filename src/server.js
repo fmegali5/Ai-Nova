@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import cors from "cors";
 import session from "express-session";
+import MongoStore from "connect-mongo";
 import passport from "./lib/passport.config.js";
 
 import authRoutes from "./routes/auth.route.js";
@@ -39,19 +40,25 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// ✅ Session Middleware مع Cookie Settings للـ Production
+// ✅ Session Middleware مع MongoDB Store للـ Production
 app.use(
   session({
     secret: ENV.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    proxy: true, // ✅ مهم مع trust proxy
+    proxy: true,
+    store: ENV.NODE_ENV === "production" 
+      ? MongoStore.create({
+          mongoUrl: ENV.MONGODB_URI,
+          touchAfter: 24 * 3600,
+        })
+      : undefined,
     cookie: {
-      secure: ENV.NODE_ENV === "production", // true في production
+      secure: ENV.NODE_ENV === "production",
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: ENV.NODE_ENV === "production" ? "none" : "lax", // ✅ none في production
-      domain: undefined, // ✅ لا تحدد domain
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
+      domain: undefined,
     },
   })
 );
