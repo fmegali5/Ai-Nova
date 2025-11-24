@@ -44,7 +44,9 @@ router.get(
   }),
   async (req, res) => {
     try {
-      const crypto from "crypto";
+      // ❌ شيلنا السطر اللي كان فيه خطأ
+      // const crypto from "crypto";
+
       const newSessionId = crypto.randomUUID();
 
       req.user.currentSessionId = newSessionId;
