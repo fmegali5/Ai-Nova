@@ -34,20 +34,17 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", { 
-    failureRedirect: "/login?error=signup_required", // ✅ غيّر الـ error
+    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=signup_required`, // ✅ FRONTEND_URL
     session: false 
   }),
   async (req, res) => {
     try {
-      // ✅ Generate Session ID
       const newSessionId = crypto.randomUUID();
       
-      // ✅ Update user
       req.user.currentSessionId = newSessionId;
       req.user.lastLogin = new Date();
       await req.user.save();
 
-      // ✅ Generate JWT token
       const token = jwt.sign(
         { 
           userId: req.user._id,
@@ -57,10 +54,8 @@ router.get(
         { expiresIn: "7d" }
       );
 
-      // ✅ حدد الـ Frontend URL
       const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
       
-      // ✅ أرسل الـ token في الـ URL
       res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
       
     } catch (error) {
@@ -81,17 +76,17 @@ router.get(
   "/google/signup/callback",
   async (req, res, next) => {
     passport.authenticate("google", { session: false }, async (err, user, info) => {
+      const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+      
       try {
         if (err) {
           console.error("❌ Error in Google Sign Up:", err);
-          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
           return res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
         }
 
         // ✅ لو المستخدم موجود بالفعل
         if (user) {
           console.log("⚠️ User already exists:", user.email);
-          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
           return res.redirect(`${FRONTEND_URL}/signup?error=already_exists`);
         }
 
@@ -99,7 +94,6 @@ router.get(
         const profile = req.user || info?.profile;
         
         if (!profile) {
-          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
           return res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
         }
 
@@ -114,13 +108,11 @@ router.get(
 
         console.log("✅ Created new Google user:", newUser.email);
 
-        // ✅ Generate Session ID
         const newSessionId = crypto.randomUUID();
         newUser.currentSessionId = newSessionId;
         newUser.lastLogin = new Date();
         await newUser.save();
 
-        // ✅ Generate JWT token
         const token = jwt.sign(
           { 
             userId: newUser._id,
@@ -130,12 +122,10 @@ router.get(
           { expiresIn: "7d" }
         );
 
-        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
         res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
 
       } catch (error) {
         console.error("❌ Error in Google Sign Up callback:", error);
-        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
         res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
       }
     })(req, res, next);
@@ -151,22 +141,18 @@ router.post("/google/verify", async (req, res) => {
       return res.status(400).json({ message: "Token is required" });
     }
 
-    // ✅ تحقق من الـ token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ جيب المستخدم من الـ database
     const user = await User.findById(decoded.userId);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ تحقق من الـ sessionId
     if (user.currentSessionId !== decoded.sessionId) {
       return res.status(401).json({ message: "Invalid session" });
     }
 
-    // ✅ احفظ الـ cookie من الـ backend
     res.cookie("jwt", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -174,7 +160,6 @@ router.post("/google/verify", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // ✅ ارجع بيانات المستخدم
     res.status(200).json({
       _id: user._id,
       fullName: user.fullName,
