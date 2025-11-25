@@ -25,7 +25,7 @@ router.get("/check", protectRoute, (req, res) => {
   res.status(200).json(req.user);
 });
 
-// ✅ Google OAuth Routes
+// ✅ Google OAuth Routes - Sign In (يرفض إنشاء حساب جديد)
 router.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -34,7 +34,7 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", { 
-    failureRedirect: "/login?error=email_exists",
+    failureRedirect: "/login?error=signup_required", // ✅ غيّر الـ error
     session: false 
   }),
   async (req, res) => {
@@ -68,6 +68,77 @@ router.get(
       const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
       res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
     }
+  }
+);
+
+// ✅ Google OAuth Routes - Sign Up (يسمح بإنشاء حساب جديد)
+router.get(
+  "/google/signup",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+router.get(
+  "/google/signup/callback",
+  async (req, res, next) => {
+    passport.authenticate("google", { session: false }, async (err, user, info) => {
+      try {
+        if (err) {
+          console.error("❌ Error in Google Sign Up:", err);
+          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+          return res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
+        }
+
+        // ✅ لو المستخدم موجود بالفعل
+        if (user) {
+          console.log("⚠️ User already exists:", user.email);
+          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+          return res.redirect(`${FRONTEND_URL}/signup?error=already_exists`);
+        }
+
+        // ✅ المستخدم مش موجود - نعمل حساب جديد
+        const profile = req.user || info?.profile;
+        
+        if (!profile) {
+          const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+          return res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
+        }
+
+        // ✅ إنشاء المستخدم الجديد
+        const newUser = await User.create({
+          googleId: profile.id,
+          fullName: profile.displayName,
+          email: profile.emails[0].value,
+          profilePic: profile.photos && profile.photos[0] ? profile.photos[0].value : "",
+          password: null,
+        });
+
+        console.log("✅ Created new Google user:", newUser.email);
+
+        // ✅ Generate Session ID
+        const newSessionId = crypto.randomUUID();
+        newUser.currentSessionId = newSessionId;
+        newUser.lastLogin = new Date();
+        await newUser.save();
+
+        // ✅ Generate JWT token
+        const token = jwt.sign(
+          { 
+            userId: newUser._id,
+            sessionId: newSessionId 
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
+        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+        res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
+
+      } catch (error) {
+        console.error("❌ Error in Google Sign Up callback:", error);
+        const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+        res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
+      }
+    })(req, res, next);
   }
 );
 
