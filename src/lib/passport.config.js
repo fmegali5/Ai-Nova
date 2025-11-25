@@ -31,14 +31,14 @@ passport.use(
         if (existingUser) {
           console.log("❌ Email exists with password login:", existingUser.email);
           return done(null, false, { 
-            message: "This email is already registered with a password. Please login with your password." 
+            message: "email_exists"
           });
         }
 
         // ❌ المستخدم مش موجود - ارفض التسجيل
         console.log("❌ User not found - Sign up required:", profile.emails[0].value);
         return done(null, false, { 
-          message: "Account not found. Please sign up first." 
+          message: "signup_required"
         });
 
       } catch (error) {
@@ -75,7 +75,7 @@ passport.use(
         if (existingUser) {
           console.log("❌ Email already registered with password:", existingUser.email);
           return done(null, false, { 
-            message: "This email is already registered. Please login." 
+            message: "already_exists"
           });
         }
 
