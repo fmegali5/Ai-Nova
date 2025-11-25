@@ -33,36 +33,55 @@ router.get(
 
 router.get(
   "/google/callback",
-  passport.authenticate("google-signin", { 
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=signup_required`,
-    session: false 
-  }),
-  async (req, res) => {
-    try {
-      const newSessionId = crypto.randomUUID();
-      
-      req.user.currentSessionId = newSessionId;
-      req.user.lastLogin = new Date();
-      await req.user.save();
-
-      const token = jwt.sign(
-        { 
-          userId: req.user._id,
-          sessionId: newSessionId 
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
+  (req, res, next) => {
+    passport.authenticate("google-signin", { session: false }, async (err, user, info) => {
       const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
       
-      res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
-      
-    } catch (error) {
-      console.error("❌ Error in Google callback:", error);
-      const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-      res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
-    }
+      try {
+        // ✅ لو في error
+        if (err) {
+          console.error("❌ Error in Google Sign In:", err);
+          return res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
+        }
+
+        // ✅ لو مفيش user (تم رفض التسجيل)
+        if (!user) {
+          const errorType = info?.message || "auth_failed";
+          console.log("❌ Sign in rejected:", errorType);
+          
+          // ✅ امسح الـ session
+          req.logout((logoutErr) => {
+            if (logoutErr) {
+              console.error("Logout error:", logoutErr);
+            }
+          });
+          
+          return res.redirect(`${FRONTEND_URL}/login?error=${errorType}`);
+        }
+
+        // ✅ المستخدم موجود - كمّل التسجيل
+        const newSessionId = crypto.randomUUID();
+        
+        user.currentSessionId = newSessionId;
+        user.lastLogin = new Date();
+        await user.save();
+
+        const token = jwt.sign(
+          { 
+            userId: user._id,
+            sessionId: newSessionId 
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
+        res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
+        
+      } catch (error) {
+        console.error("❌ Error in Google callback:", error);
+        res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
+      }
+    })(req, res, next);
   }
 );
 
@@ -74,46 +93,73 @@ router.get(
 
 router.get(
   "/google/signup/callback",
-  passport.authenticate("google-signup", {
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/signup?error=auth_failed`,
-    session: false
-  }),
-  async (req, res) => {
-    try {
+  (req, res, next) => {
+    passport.authenticate("google-signup", { session: false }, async (err, user, info) => {
       const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
       
-      // ✅ تحقق لو المستخدم كان موجود قبل كده
-      const existingUser = await User.findOne({ 
-        googleId: req.user.googleId,
-        _id: { $ne: req.user._id }
-      });
-      
-      if (existingUser) {
-        console.log("⚠️ User already exists");
-        return res.redirect(`${FRONTEND_URL}/signup?error=already_exists`);
+      try {
+        // ✅ لو في error
+        if (err) {
+          console.error("❌ Error in Google Sign Up:", err);
+          return res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
+        }
+
+        // ✅ لو مفيش user (تم رفض التسجيل)
+        if (!user) {
+          const errorType = info?.message || "auth_failed";
+          console.log("❌ Sign up rejected:", errorType);
+          
+          // ✅ امسح الـ session
+          req.logout((logoutErr) => {
+            if (logoutErr) {
+              console.error("Logout error:", logoutErr);
+            }
+          });
+          
+          return res.redirect(`${FRONTEND_URL}/signup?error=${errorType}`);
+        }
+
+        // ✅ تحقق لو المستخدم موجود من قبل
+        const existingCheck = await User.findOne({ 
+          googleId: user.googleId,
+          _id: { $ne: user._id }
+        });
+        
+        if (existingCheck) {
+          console.log("⚠️ User already exists");
+          
+          // ✅ امسح الـ session
+          req.logout((logoutErr) => {
+            if (logoutErr) {
+              console.error("Logout error:", logoutErr);
+            }
+          });
+          
+          return res.redirect(`${FRONTEND_URL}/signup?error=already_exists`);
+        }
+
+        // ✅ المستخدم جديد - كمّل التسجيل
+        const newSessionId = crypto.randomUUID();
+        user.currentSessionId = newSessionId;
+        user.lastLogin = new Date();
+        await user.save();
+
+        const token = jwt.sign(
+          { 
+            userId: user._id,
+            sessionId: newSessionId 
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
+        res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
+
+      } catch (error) {
+        console.error("❌ Error in Google Sign Up callback:", error);
+        res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
       }
-
-      const newSessionId = crypto.randomUUID();
-      req.user.currentSessionId = newSessionId;
-      req.user.lastLogin = new Date();
-      await req.user.save();
-
-      const token = jwt.sign(
-        { 
-          userId: req.user._id,
-          sessionId: newSessionId 
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
-
-    } catch (error) {
-      console.error("❌ Error in Google Sign Up callback:", error);
-      const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-      res.redirect(`${FRONTEND_URL}/signup?error=auth_failed`);
-    }
+    })(req, res, next);
   }
 );
 
