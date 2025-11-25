@@ -11,6 +11,7 @@ import { protectRoute } from "../middleware/auth.middleware.js";
 import passport from "../lib/passport.config.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import User from "../models/User.js";
 
 const router = express.Router();
 
@@ -69,5 +70,53 @@ router.get(
     }
   }
 );
+
+// ✅ Google Token Verification Route
+router.post("/google/verify", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    // ✅ تحقق من الـ token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // ✅ جيب المستخدم من الـ database
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ تحقق من الـ sessionId
+    if (user.currentSessionId !== decoded.sessionId) {
+      return res.status(401).json({ message: "Invalid session" });
+    }
+
+    // ✅ احفظ الـ cookie من الـ backend
+    res.cookie("jwt", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // ✅ ارجع بيانات المستخدم
+    res.status(200).json({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      profilePic: user.profilePic,
+      isPremium: user.isPremium,
+      isAdmin: user.isAdmin,
+    });
+
+  } catch (error) {
+    console.error("❌ Error verifying Google token:", error);
+    res.status(401).json({ message: "Invalid or expired token" });
+  }
+});
 
 export default router;
