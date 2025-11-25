@@ -13,7 +13,6 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      // ✅ استخدم الـ URL الكامل من ENV
       callbackURL: `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/google/callback`,
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -31,25 +30,18 @@ passport.use(
         const existingUser = await User.findOne({ email: profile.emails[0].value });
 
         if (existingUser) {
-          // ❌ الإيميل موجود بالفعل لكن بدون Google ID
-          // بدل الربط التلقائي، نرجع error
-          console.log("❌ Email already exists with password login:", existingUser.email);
+          // ❌ الإيميل موجود بالفعل لكن بدون Google ID (مسجل بـ password)
+          console.log("❌ Email exists with password login:", existingUser.email);
           return done(null, false, { 
             message: "This email is already registered with a password. Please login with your password." 
           });
         }
 
-        // ✅ إنشاء مستخدم جديد بـ Google
-        user = await User.create({
-          googleId: profile.id,
-          fullName: profile.displayName,
-          email: profile.emails[0].value,
-          profilePic: profile.photos && profile.photos[0] ? profile.photos[0].value : "",
-          password: null,
+        // ❌ المستخدم مش موجود خالص - ارفض التسجيل
+        console.log("❌ User not found - Sign up required:", profile.emails[0].value);
+        return done(null, false, { 
+          message: "Account not found. Please sign up first." 
         });
-        
-        console.log("✅ Created new Google user:", user.email);
-        done(null, user);
 
       } catch (error) {
         console.error("❌ Error in Google Strategy:", error);
