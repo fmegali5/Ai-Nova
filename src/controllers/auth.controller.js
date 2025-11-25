@@ -24,8 +24,13 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    const user = await User.findOne({ email });
-    if (user) return res.status(400).json({ message: "Email already exists" });
+    // ✅ تحقق من الإيميل قبل إنشاء الحساب
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: "Email already exists. Please use a different email or login instead." 
+      });
+    }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -53,13 +58,13 @@ export const signup = async (req, res) => {
       try {
         await sendWelcomeEmail(savedUser.email, savedUser.fullName, ENV.CLIENT_URL);
       } catch (error) {
-        console.error("Failed to send welcome email:", error.message); // ✅ عدّلنا هنا
+        console.error("Failed to send welcome email:", error.message);
       }
     } else {
       res.status(400).json({ message: "Invalid user data" });
     }
   } catch (error) {
-    console.log("Error in signup controller:", error.message); // ✅ عدّلنا هنا
+    console.log("Error in signup controller:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -99,7 +104,6 @@ export const login = async (req, res) => {
       profilePic: user.profilePic,
     });
   } catch (error) {
-    // ✅ الحل: استخدم error.message و error.stack
     console.error("Error in login controller:", error.message);
     if (error.stack) {
       console.error("Stack trace:", error.stack);
@@ -119,7 +123,7 @@ export const logout = async (req, res) => {
     res.cookie("jwt", "", { maxAge: 0 });
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    console.error("Error in logout:", error.message); // ✅ عدّلنا هنا
+    console.error("Error in logout:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -152,7 +156,7 @@ export const updateProfile = async (req, res) => {
 
     return res.status(400).json({ message: "No data to update" });
   } catch (error) {
-    console.log("Error in update profile:", error.message); // ✅ عدّلنا هنا
+    console.log("Error in update profile:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -186,7 +190,7 @@ export const updateSettings = async (req, res) => {
 
     res.status(200).json(updatedUser);
   } catch (error) {
-    console.log("Error in updateSettings:", error.message); // ✅ عدّلنا هنا
+    console.log("Error in updateSettings:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -213,7 +217,7 @@ export const changePassword = async (req, res) => {
 
     res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {
-    console.log("Error in changePassword controller:", error.message); // ✅ عدّلنا هنا
+    console.log("Error in changePassword controller:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };
