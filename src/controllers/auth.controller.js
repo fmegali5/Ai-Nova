@@ -120,8 +120,27 @@ export const logout = async (req, res) => {
       });
     }
 
-    res.cookie("jwt", "", { maxAge: 0 });
-    res.status(200).json({ message: "Logged out successfully" });
+    // ✅ امسح الـ cookie بكل الطرق
+    res.cookie("jwt", "", { 
+      maxAge: 0,
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/"
+    });
+    
+    // ✅ امسح بطريقة تانية
+    res.clearCookie("jwt", {
+      path: "/",
+      httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+    
+    res.status(200).json({ 
+      message: "Logged out successfully",
+      success: true 
+    });
   } catch (error) {
     console.error("Error in logout:", error.message);
     res.status(500).json({ message: "Internal server error" });
