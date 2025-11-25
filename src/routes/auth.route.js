@@ -56,23 +56,16 @@ router.get(
         { expiresIn: "7d" }
       );
 
-      // ✅ Set cookie
-      res.cookie("jwt", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-
       // ✅ حدد الـ Frontend URL
       const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
       
-      // ✅ حوّل للـ chat page
-      res.redirect(`${FRONTEND_URL}/chat`);
+      // ✅ أرسل الـ token في الـ URL
+      res.redirect(`${FRONTEND_URL}/auth/google/success?token=${token}`);
       
     } catch (error) {
       console.error("❌ Error in Google callback:", error);
-      res.redirect("/login?error=auth_failed");
+      const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+      res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
     }
   }
 );
