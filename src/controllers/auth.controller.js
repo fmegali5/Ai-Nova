@@ -24,6 +24,7 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
+    // ✅ تحقق من الإيميل قبل إنشاء الحساب
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ 
@@ -45,14 +46,13 @@ export const signup = async (req, res) => {
 
     if (newUser) {
       const savedUser = await newUser.save();
-      const token = generateToken(savedUser._id, res, sessionId); // ✅ خزن التوكن
+      generateToken(savedUser._id, res, sessionId);
 
       res.status(201).json({
-        _id: savedUser._id,
-        fullName: savedUser.fullName,
-        email: savedUser.email,
-        profilePic: savedUser.profilePic,
-        token, // ✅ رجّع التوكن هنا
+        _id: newUser._id,
+        fullName: newUser.fullName,
+        email: newUser.email,
+        profilePic: newUser.profilePic,
       });
 
       try {
@@ -83,22 +83,25 @@ export const login = async (req, res) => {
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) return res.status(400).json({ message: "Invalid credentials" });
 
+    // ✅ Invalidate old session via Socket
     invalidateUserSession(user._id.toString(), "You were logged in from another device");
 
+    // ✅ Generate new Session ID
     const newSessionId = crypto.randomUUID();
 
+    // ✅ Update user with new session
     user.currentSessionId = newSessionId;
     user.lastLoginAt = new Date();
     await user.save();
 
-    const token = generateToken(user._id, res, newSessionId); // ✅ خزن التوكن
+    // ✅ Generate token with session ID
+    generateToken(user._id, res, newSessionId);
 
     res.status(200).json({
       _id: user._id,
       fullName: user.fullName,
       email: user.email,
       profilePic: user.profilePic,
-      token, // ✅ رجّع التوكن هنا
     });
   } catch (error) {
     console.error("Error in login controller:", error.message);
@@ -117,19 +120,21 @@ export const logout = async (req, res) => {
       });
     }
 
+    // ✅ امسح الـ cookie بكل الطرق
     res.cookie("jwt", "", { 
       maxAge: 0,
       httpOnly: true,
-      sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
-      secure: ENV.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/"
     });
     
+    // ✅ امسح بطريقة تانية
     res.clearCookie("jwt", {
       path: "/",
       httpOnly: true,
-      sameSite: ENV.NODE_ENV === "production" ? "none" : "lax",
-      secure: ENV.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
     });
     
     res.status(200).json({ 
